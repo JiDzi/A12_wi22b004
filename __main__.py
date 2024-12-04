@@ -1,7 +1,7 @@
 """Ein Pulumi-Skript zur Erstellung einer Azure-VM mit Monitoring"""
 
 import pulumi
-from pulumi_azure_native import resources, storage, network, compute
+from pulumi_azure_native import resources, storage, network, compute, insights
 
 # Konfigurationsvariablen
 resource_group_name = "A12_Monitoring"
@@ -89,6 +89,34 @@ vm = compute.VirtualMachine(
             storage_uri=storage_account.primary_endpoints.blob,
         )
     ),
+)
+
+# Metric Alert für CPU-Auslastung hinzufügen
+alert_rule = insights.MetricAlert(
+    "vmCpuUsageAlert",
+    resource_group_name=resource_group.name,
+    location="global",  # Globale Alert-Regel erforderlich
+    severity=3,
+    window_size="PT30M",  # 30-Minuten Intervall
+    evaluation_frequency="PT1M",  # Evaluierung alle Minute
+    enabled=True,
+    scopes=[vm.id],
+    criteria=insights.MetricAlertSingleResourceMultipleMetricCriteriaArgs(
+        odata_type="Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",  # Globale Kriterien
+        all_of=[
+            insights.MetricCriteriaArgs(
+                name="HighCpuUsage",
+                metric_namespace="Microsoft.Compute/virtualMachines",  # Namespace für VM-Metriken
+                metric_name="Percentage CPU",  # CPU-Auslastung
+                operator="GreaterThan",  # Schwellenwert-Regel
+                threshold=80,  # 80% CPU-Nutzung
+                time_aggregation="Maximum",  # Maximalwert
+                criterion_type="StaticThresholdCriterion",  # Statische Schwelle
+            )
+        ],
+    ),
+    auto_mitigate=True,
+    description="Alert rule for CPU usage above 80% on monitored Linux VM.",
 )
 
 # Outputs
